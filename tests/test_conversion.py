@@ -161,6 +161,40 @@ def test_parse_with_custom_end_indicator():
     assert cues[-1].description != "ARRIVÉE: End of route"  # End is NOT the end_indicator
 
 
+def test_parse_route_with_turns():
+    csv_data = [
+        ["Start", "Start of route", "0", "0", ""],
+        ["Right", "Turn right onto Test St", "0.5", "10.0", ""],
+        ["Left", "Turn left onto Main St", "2.0", "15.0", ""],
+        ["Food", "Food stop at cafe", "5.0", "20.0", ""],
+        ["Control", "Control checkpoint", "10.0", "25.0", ""],
+        ["Right", "At roundabout, take exit 2 onto Sesame Street", "11.0", "25.5", ""],
+        ["Slight Left", "Turn slight left onto Big Bird Lane", "12.0", "30.5", ""],
+        ["Right", "Keep right onto Big Bird Lane", "12.5", "32.2", ""],
+        ["Uturn", "Make a U-turn on Big Bird Lane", "13.5", "35.0", ""],
+        ["Left", "Turn left into Bletchley Park", "14.0", "45.0", ""],
+        ["Control", "Control 2: Bletchley Park visitor centre", "14.2", "45.2", ""],
+        ["End", "End of route", "20.0", "30.0", ""],
+    ]
+    expected_cues = [
+        Cue('', 'DÉPART', Decimal('0.5'), is_control=True, last_dist=Decimal('0')),
+        Cue('R', 'Test St', Decimal('2.0'), last_dist=Decimal('0.5')),
+        Cue('L', 'Main St', Decimal('5.0'), last_dist=Decimal('2.0')),
+        Cue('', 'Food stop at cafe', Decimal('10.0'), last_dist=Decimal('5.0')),
+        Cue('', 'Control checkpoint', Decimal('11.0'), is_control=True, last_dist=Decimal('10.0')),
+        Cue('R', 'Sesame Street (roundabout exit 2)', Decimal('12.0'), last_dist=Decimal('11.0')),
+        Cue('BL', 'Big Bird Lane', Decimal('12.5'), last_dist=Decimal('12.0')),
+        Cue('R', 'Big Bird Lane', Decimal('13.5'), last_dist=Decimal('12.5')),
+        Cue('TA', 'Big Bird Lane', Decimal('14.0'), last_dist=Decimal('13.5')),
+        Cue('L', 'Bletchley Park', Decimal('14.2'), last_dist=Decimal('14.0')),
+        Cue('', 'Bletchley Park visitor centre', Decimal('20.0'), is_control=True, last_dist=Decimal('14.2')),
+        Cue('', 'ARRIVÉE', Decimal('-1.0'), is_control=True, last_dist=Decimal('20.0')),
+    ]
+    opts = GenerationOptions()
+    cues = _parse_to_cues(csv_data, opts)
+    assert cues == expected_cues
+
+
 def test_parse_empty_data():
     csv_data = []
     opts = GenerationOptions()

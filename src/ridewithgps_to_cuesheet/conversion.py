@@ -84,18 +84,13 @@ def generate_excel(filename: str, csv_values: List[List[str]], opts: GenerationO
         page_break_list = []
         last_row_was_control = False
 
-        for cue_num in range(len(cues)):
-            turn = cues[cue_num]
+        for cue_num, turn in enumerate(cues):
             curr_dist = turn.dist - last_dist
             last_dist = Decimal("0.0")
 
             if opts.verbose:
-                tmp = f"We're on turn {cue_num} at {turn.dist}kms"
-                if "onto" in turn.description:
-                    tmp = f"({turn.description[turn.description.find('onto') + 5 :]}) {tmp}"
-                else:
-                    tmp = f"{turn.description}: {tmp}"
-                logger.debug(f"{tmp}\n\testimated distance is {curr_dist}kms since last")
+                logger.debug(f"{turn.description}: We're on turn {cue_num} at {turn.dist}km\n"
+                             f"\testimated distance is {curr_dist}km since last")
 
             _write_data_row(
                 worksheet,
@@ -326,7 +321,7 @@ def _add_footer_information(worksheet: Worksheet, row_num: int, last_col_letter:
     row_num += 2
     worksheet.merge_range(
         f"A{row_num}:{last_col_letter}{row_num}",
-        data="ST=Turn Around, BL=Bear Left, BR=Bear Right, CO=Continue On, L/R=Left Immediate Right",
+        data="TA=Turn Around, BL=Bear Left, BR=Bear Right, CO=Continue On",
         cell_format=formats.black_title,
     )
     worksheet.set_row(row=row_num - 1, height=CONTROL_ROW_HEIGHT * 2)
@@ -353,7 +348,7 @@ def _parse_to_cues(array: List[List[str]], opts: GenerationOptions) -> List[Cue]
 
 def _read_as_cue(row: List[str], idx: int, last_dist: Decimal, opts: GenerationOptions) -> Cue:
     has_end = False
-    is_control = row[0] in opts.control_cue_indicators or (row[1].startswith("Control:"))
+    is_control = bool(row[0] in opts.control_cue_indicators or re.match(r"^Control.*?:", row[1]))
     is_danger = row[0].lower() == "danger"
     this_dist = Decimal(row[2])
 
@@ -402,16 +397,18 @@ def _map_cue_description(opts: GenerationOptions, description: str) -> str:
         return opts.start_text
     elif description == "End of route":
         return opts.end_text
-    elif description.startswith("Continue onto "):
-        return description[len("Continue onto ") :]
-    elif description.startswith("Control:"):
-        return description[len("Control:") :]
-
-    for direction in ["left", "right"]:
-        if description.startswith(f"Turn {direction} onto "):
-            return description[len(f"Turn {direction} onto ") :]
-        elif re.match(f"Turn {direction} to ([^(stay)])", description):
-            return description[len(f"Turn {direction} to ") :]
+    elif match := re.match("Control.*?: *(?P<control_name>.*)", description):
+        return match.group('control_name')
+    elif match := re.match(r"^At roundabout, take exit (?P<exit>\d+) [io]nto (?P<road>.*)", description):
+        return f"{match.group('road')} (roundabout exit {match.group('exit')})"
+    elif match := re.match(r"^Continue (?:straight )?[io]nto (?P<road>.*)", description):
+        return match.group('road')
+    elif match := re.match(r"^(?:Keep|Turn) (?:slight )?(?:left|right) [io]nto (?P<road>.*)", description):
+        return match.group('road')
+    elif match := re.match(r"^(?:Make a )?U-turn on(?:to)? (?P<road>.*)", description):
+        return match.group('road')
+    elif match := re.match(f"Turn (?P<direction>left|right) to ([^(stay)])", description):
+        return description[len(f"Turn {match.group('direction')} to ") :]
 
     description = description.replace("becomes", "b/c")
     description = description.replace("slightly ", "")
